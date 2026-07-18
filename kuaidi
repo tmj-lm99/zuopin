@@ -1,0 +1,267 @@
+// 导入标准库
+use std::io;
+use std::fs;
+use std::vec::Vec;
+
+// 枚举：快递站点分类
+enum Station {
+    Cainiao,  // 菜鸟驿站
+    JD,       // 京东快递
+    SF,       // 顺丰快递
+    Other     // 其他快递
+}
+
+impl Station {
+    // 根据输入数字转换为对应站点
+    fn from_num(num: Int) -> Station {
+        match num {
+            1 => Station::Cainiao,
+            2 => Station::JD,
+            3 => Station::SF,
+            _ => Station::Other
+        }
+    }
+
+    // 站点类型转为中文名称
+    fn get_name(&self) -> String {
+        match self {
+            Station::Cainiao => "菜鸟驿站".to_string(),
+            Station::JD => "京东快递".to_string(),
+            Station::SF => "顺丰快递".to_string(),
+            Station::Other => "其他快递".to_string()
+        }
+    }
+}
+
+// 枚举：快递取件状态
+enum Status {
+    Pending,  // 待取件
+    Picked    // 已取件
+}
+
+// 结构体：单条快递记录
+struct Express {
+    id: Int,         // 快递序号
+    code: String,    // 取件码
+    station: Station,// 所属快递站
+    status: Status   // 取件状态
+}
+
+impl Express {
+    // 创建新的快递记录，默认状态为待取件
+    fn new(id: Int, code: String, station: Station) -> Express {
+        Express {
+            id: id,
+            code: code,
+            station: station,
+            status: Status::Pending
+        }
+    }
+}
+
+// 工具函数：读取用户输入的一行文本
+fn read_input() -> String {
+    let mut input = String::new();
+    // 从标准输入读取一行
+    io::stdin().read_line(&mut input).unwrap();
+    // 去掉首尾的空格和换行
+    input.trim().to_string()
+}
+
+// 工具函数：读取用户输入的数字，输入非法返回-1
+fn read_number() -> Int {
+    let input_str = read_input();
+    match input_str.parse::<Int>() {
+        Ok(num) => num,
+        Err(_) => -1
+    }
+}
+
+// 功能：按站点分类展示所有待取件
+fn show_pending_express(list: &Vec<Express>) {
+    println!("\n===== 待取件清单 =====");
+    if list.len() == 0 {
+        println!("当前没有待取的快递~");
+        return;
+    }
+
+    // 四个站点的名称，按顺序对应枚举
+    let station_names = ["菜鸟驿站", "京东快递", "顺丰快递", "其他快递"];
+    let mut total_count = 0;
+
+    // 逐个站点遍历打印
+    for station_idx in 0..4 {
+        let mut has_express = false;
+
+        // 遍历所有快递，找出当前站点的待取件
+        for i in 0..list.len() {
+            let current = &list[i];
+            
+            // 判断是否是当前站点
+            let is_current_station = match current.station {
+                Station::Cainiao => station_idx == 0,
+                Station::JD => station_idx == 1,
+                Station::SF => station_idx == 2,
+                Station::Other => station_idx == 3,
+            };
+
+            // 判断是否是待取件状态
+            let is_pending = match current.status {
+                Status::Pending => true,
+                Status::Picked => false,
+            };
+
+            if is_current_station && is_pending {
+                // 第一次遇到该站点的快递，先打印站点标题
+                if !has_express {
+                    println!("\n【{}】", station_names[station_idx]);
+                    has_express = true;
+                }
+                println!("  序号{} | 取件码：{}", current.id, current.code);
+                total_count = total_count + 1;
+            }
+        }
+    }
+
+    println!("\n合计待取件：{} 件", total_count);
+}
+
+// 功能：根据序号标记快递为已取件
+fn mark_as_picked(list: &mut Vec<Express>, target_id: Int) -> Bool {
+    for i in 0..list.len() {
+        if list[i].id == target_id {
+            match list[i].status {
+                Status::Pending => {
+                    list[i].status = Status::Picked;
+                    return true;
+                }
+                Status::Picked => {
+                    return false;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// 功能：导出待取件清单到本地txt文件
+fn export_list_to_file(list: &Vec<Express>, file_path: &str) -> Result<(), io::Error> {
+    let mut content = String::from("===== 取件清单 =====\n");
+    let station_names = ["菜鸟驿站", "京东快递", "顺丰快递", "其他快递"];
+
+    for station_idx in 0..4 {
+        let mut has_express = false;
+
+        for i in 0..list.len() {
+            let current = &list[i];
+            let is_current_station = match current.station {
+                Station::Cainiao => station_idx == 0,
+                Station::JD => station_idx == 1,
+                Station::SF => station_idx == 2,
+                Station::Other => station_idx == 3,
+            };
+            let is_pending = match current.status {
+                Status::Pending => true,
+                Status::Picked => false,
+            };
+
+            if is_current_station && is_pending {
+                if !has_express {
+                    content.push_str(&format!("\n【{}】\n", station_names[station_idx]));
+                    has_express = true;
+                }
+                content.push_str(&format!("序号{}：{}\n", current.id, current.code));
+            }
+        }
+    }
+
+    // 写入文件
+    fs::write(file_path, content)?;
+    Ok(())
+}
+
+// 主函数：程序入口
+fn main() {
+    // 存储所有快递记录的动态数组
+    let mut express_list: Vec<Express> = Vec::new();
+    // 自增序号，每录入一个快递+1
+    let mut next_id: Int = 1;
+
+    println!("=== 校园快递取件码管理工具 ===");
+    println!("基于仓颉语言开发，帮你分类整理快递取件码\n");
+
+    // 主循环，一直运行直到选择退出
+    loop {
+        println!("\n===== 功能菜单 =====");
+        println!("1. 录入新快递");
+        println!("2. 查看待取件清单");
+        println!("3. 标记快递已取件");
+        println!("4. 导出取件清单到文件");
+        println!("0. 退出程序");
+        println!("请输入选项数字：");
+
+        let choice = read_number();
+
+        match choice {
+            1 => {
+                // 录入快递
+                println!("\n--- 录入新快递 ---");
+                println!("请输入取件码：");
+                let code = read_input();
+                
+                if code.len() == 0 {
+                    println!("错误：取件码不能为空！");
+                    continue;
+                }
+
+                println!("请选择快递站点：");
+                println!("1.菜鸟驿站  2.京东快递  3.顺丰快递  4.其他");
+                let station_num = read_number();
+                let station = Station::from_num(station_num);
+
+                let new_express = Express::new(next_id, code, station);
+                express_list.push(new_express);
+                println!("✅ 录入成功！该快递序号为 {}", next_id);
+                next_id = next_id + 1;
+            }
+
+            2 => {
+                // 查看待取件
+                show_pending_express(&express_list);
+            }
+
+            3 => {
+                // 标记已取件
+                println!("\n--- 标记已取件 ---");
+                println!("请输入要标记的快递序号：");
+                let target_id = read_number();
+
+                if mark_as_picked(&mut express_list, target_id) {
+                    println!("✅ 序号 {} 的快递已标记为已取件", target_id);
+                } else {
+                    println!("❌ 未找到对应序号的待取快递");
+                }
+            }
+
+            4 => {
+                // 导出文件
+                println!("\n--- 导出取件清单 ---");
+                let file_name = "取件清单.txt";
+                match export_list_to_file(&express_list, file_name) {
+                    Ok(_) => println!("✅ 导出成功！文件已保存为：{}", file_name),
+                    Err(e) => println!("❌ 导出失败：{}", e)
+                }
+            }
+
+            0 => {
+                // 退出程序
+                println!("程序已退出，取件愉快~");
+                break;
+            }
+
+            _ => {
+                println!("❌ 无效选项，请输入0-4之间的数字！");
+            }
+        }
+    }
+}
